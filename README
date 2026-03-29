@@ -1,0 +1,53 @@
+CprE 308 Project 1 
+Repository: cpre308-sp26-mysh-Group22
+
+Group Members
+Ping Wu
+
+Overview
+This project implements a simplified UNIX shell called mysh written in C. The shell allows users to enter commands similar to a normal terminal and executes them using core operating system concepts such as process creation, execution, and file descriptor management.
+
+The shell runs in a loop, reads user input, determines whether a command is built-in or external, and executes it accordingly.
+
+Stages Completed
+
+Stage 1 — REPL and Built-in Commands
+A working shell loop was implemented that displays a prompt (mysh>), reads user input, and parses commands.
+
+The following built-in commands are supported:
+
+exit [n]: exits the shell with an optional status code, with validation using strtol
+cd [dir]: changes the current directory, defaulting to $HOME if no argument is provided
+pwd: prints the current working directory
+pid: prints the shell’s process ID
+ppid: prints the shell’s parent process ID
+
+Stage 2 — External Command Execution
+External commands are executed using fork(), execvp(), and waitpid(). The shell creates a child process to execute the command, while the parent waits for it to finish.
+
+The shell prints the process ID before execution and the exit status after completion.
+
+Stage 3 — I/O Redirection
+Input and output redirection are supported and handled in the child process before executing the command. The implementation uses open() and dup2() to redirect file descriptors and close() to prevent file descriptor leaks.
+
+The shell supports the following:
+
+cmd > file for overwriting output
+cmd >> file for appending output
+cmd < file for input redirection
+combinations of input and output redirection
+
+Stage 4 — Pipes (Bonus)
+A single pipe between two commands is implemented. The shell creates a pipe and forks two child processes. The first command writes to the pipe, and the second command reads from it.
+
+The parent process closes both ends of the pipe and waits for both children to finish. This allows the output of one command to be used as input to another.
+
+Known Limitations
+This shell only supports a single pipe between two commands and does not support chaining multiple pipes. It does not include background execution, command history, advanced parsing, or quoted arguments.
+
+How to Build and Run
+
+To compile the program:
+make
+To run the shell:
+./mysh

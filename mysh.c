@@ -122,6 +122,17 @@ static int run_builtin(Command *cmd)
          *   const char *dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
          *   if (!dir) { fprintf(stderr, "mysh: cd: HOME not set\n"); return 0; }
          *   if (chdir(dir) < 0) perror("cd");                                    */
+
+        const char *dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
+        if (!dir) {
+            fprintf(stderr, "mysh: cd: HOME not set\n");
+            retrun 0;
+        }
+
+        if (chdir(dir) < 0) {
+            perror("cd");
+        }
+
         return 0;
     }
 
@@ -132,18 +143,29 @@ static int run_builtin(Command *cmd)
          *   char buf[PATH_MAX];
          *   if (getcwd(buf, sizeof(buf)) == NULL) perror("pwd");
          *   else printf("%s\n", buf);                                            */
+
+        if (strcmp(cmd->argv[0], "pwd") == 0) {
+            char buf[PATH_MAX];
+            if (getcwd(buf, sizeof(buf)) == NULL) {
+                perror("pwd");
+            } else {
+                printf("%s\n", buf);
+            }
         return 0;
+        }
     }
 
     /* ---- pid ---- */
     if (strcmp(cmd->argv[0], "pid") == 0) {
         /* [S1] TODO: printf("%d\n", (int)getpid()); */
+        printf("%d\n", (int)getpid());
         return 0;
     }
 
     /* ---- ppid ---- */
     if (strcmp(cmd->argv[0], "ppid") == 0) {
         /* [S1] TODO: printf("%d\n", (int)getppid()); */
+        printf("%d\n", (int)getppid());
         return 0;
     }
 
@@ -197,16 +219,22 @@ static void run_external(Command *cmd)
         apply_redirections(cmd);   /* Stage 3: set up redirections  */
 
         /* [S2] TODO: call execvp here */
-
+        execvp(cmd->argv[0], cmd->argv);
         perror(cmd->argv[0]);
         exit(1);
 
     } else {
         /* --- PARENT --- */
         /* [S2] TODO: print PID, waitpid, print exit status */
+
+        printf("[%d] %s\n", pid, cmd->argv[0]);
+
         int status;
         waitpid(pid, &status, 0);
-        (void)status;  /* remove this line once you use status */
+
+        if (WIFEXITED(status)) {
+            printf("[%d] %s Exit %d\n", pid, cmd->argv[0], WEXITSTATUS(status));
+        }
     }
 }
 
@@ -239,8 +267,42 @@ static void run_external(Command *cmd)
 static void apply_redirections(Command *cmd)
 {
     /* [S3] TODO: implement input redirection (cmd->input_file)  */
+    if (cmd->input_file) {
+    int fd = open(cmd->input_file, O_RDONLY);
+    if (fd < 0) {
+        perror("open");
+        exit(1);
+    }
+
+    if (dup2(fd, STDIN_FILENO) < 0) {
+        perror("dup2");
+        exit(1);
+    }
+
+    close(fd);
+    }
     /* [S3] TODO: implement output redirection (cmd->output_file) */
-    (void)cmd;  /* remove this line once you start implementing */
+    if (cmd->output_file) {
+    int flags = O_WRONLY | O_CREAT;
+
+    if (cmd->append)
+        flags |= O_APPEND;
+    else
+        flags |= O_TRUNC;
+
+    int fd = open(cmd->output_file, flags, 0644);
+    if (fd < 0) {
+        perror("open");
+        exit(1);
+    }
+
+    if (dup2(fd, STDOUT_FILENO) < 0) {
+        perror("dup2");
+        exit(1);
+    }
+
+    close(fd);
+    }
 }
 
 /* ================================================================== */
@@ -285,6 +347,71 @@ static void apply_redirections(Command *cmd)
  */
 static void run_pipe(Command *cmd)
 {
-    (void)cmd;
-    fprintf(stderr, "mysh: pipes not yet implemented (bonus stage)\n");
+    int pfd[2];
+
+    // create pipe
+    if (pipe(pfd) < 0) {
+        perror("pipe");
+        return;
+    }
+
+    // fork left child 
+    pid_t left = fork();
+    if (left < 0) {
+        perror("fork");
+        return;
+    }
+
+    // Left child writes to pipe
+    if (left == 0) {
+
+        // redirect stdout to pipe write end
+        if (dup2(pfd[1], STDOUT_FILENO) < 0) {
+            perror("dup2");
+            exit(1);
+        }
+        
+        // close read end
+        close(pfd[0]); 
+        // close original write end
+        close(pfd[1]); 
+
+        execvp(cmd->argv[0], cmd->argv);
+        perror(cmd->argv[0]);
+        exit(1);
+    }
+
+    // fork right child 
+    pid_t right = fork();
+    if (right < 0) {
+        perror("fork");
+        return;
+    }
+
+    // Right child reads from pipe
+    if (right == 0) {
+
+        // redirect stdin to pipe read end
+        if (dup2(pfd[0], STDIN_FILENO) < 0) {
+            perror("dup2");
+            exit(1);
+        }
+        // close write end
+        close(pfd[1]); 
+        // close original read end
+        close(pfd[0]); 
+
+        execvp(cmd->pipe_argv[0], cmd->pipe_argv);
+        perror(cmd->pipe_argv[0]);
+        exit(1);
+    }
+
+    // parent closes BOTH ends
+    close(pfd[0]);
+    close(pfd[1]);
+
+    // wait for both children
+    waitpid(left, NULL, 0);
+    waitpid(right, NULL, 0);
+    
 }
