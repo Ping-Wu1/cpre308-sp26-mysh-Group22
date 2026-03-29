@@ -126,7 +126,7 @@ static int run_builtin(Command *cmd)
         const char *dir = (cmd->argc > 1) ? cmd->argv[1] : getenv("HOME");
         if (!dir) {
             fprintf(stderr, "mysh: cd: HOME not set\n");
-            retrun 0;
+            return 0;
         }
 
         if (chdir(dir) < 0) {
